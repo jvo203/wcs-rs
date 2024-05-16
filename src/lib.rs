@@ -91,8 +91,8 @@ impl WCSHeader {
             match key.trim() {
                 "NAXIS1" => naxis1 = value.parse().unwrap(),
                 "NAXIS2" => naxis2 = value.parse().unwrap(),
-                "CTYPE1" => ctype1 = value.to_string(),
-                "CTYPE2" => ctype2 = value.to_string(),
+                "CTYPE1" => ctype1 = value.to_string().replace("'", ""),
+                "CTYPE2" => ctype2 = value.to_string().replace("'", ""),
                 _ => {
                     if let Ok(value) = value.parse() {
                         cards.insert(key.to_string(), value);
