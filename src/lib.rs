@@ -135,6 +135,28 @@ impl WCSHeader {
             None
         }
     }
+
+    pub fn get_ctype(&self, idx: usize) -> Result<String, Error> {
+        let value = match idx {
+            1 => &self.ctype1,
+            2 => &self.ctype2,
+            _ => "",
+        };
+
+        if value.is_empty() {
+            Err(Error::MandatoryWCSKeywordsMissing("CTYPE"))
+        } else {
+            Ok(value.to_string())
+        }
+    }
+
+    pub fn get_float(&self, key: &str) -> Option<Result<f64, Error>> {
+        if let Some(value) = self.cards.get(key.trim()) {
+            Some(Ok(*value))
+        } else {
+            None
+        }
+    }
 }
 
 pub struct WCS {
