@@ -8,12 +8,13 @@ mod error;
 use coo_system::CooSystem;
 use error::Error;
 pub mod coo_system;
+mod header;
 mod projection;
 mod sip;
 mod utils;
 
+use crate::header::WCSHeader;
 use crate::projection::WCSCanonicalProjection;
-use std::collections::HashMap;
 
 // Imports
 use fitsrs::hdu::header::{extension::image::Image, Header};
@@ -58,107 +59,6 @@ pub type ImgXY = mapproj::ImgXY;
 /// longitude and latitude expressed in degrees
 pub type LonLat = mapproj::LonLat;
 
-#[derive(Debug)]
-pub struct WCSHeader {
-    naxis1: u64,
-    naxis2: u64,
-    ctype1: String,
-    ctype2: String,
-    cards: HashMap<String, f64>,
-}
-
-const FITS_LINE_LENGTH: usize = 80;
-
-impl WCSHeader {
-    pub fn new(s: &str) -> Self {
-        let mut cards = HashMap::new();
-        let mut naxis1 = 0;
-        let mut naxis2 = 0;
-        let mut ctype1 = String::new();
-        let mut ctype2 = String::new();
-
-        let mut offset: usize = 0;
-
-        while offset < s.len() {
-            let line = &s[offset..offset + FITS_LINE_LENGTH];
-            offset += FITS_LINE_LENGTH;
-
-            // split the line into key and value by "= "
-            let mut iter = line.split("= ");
-            let key = iter.next();
-            let value = iter.next();
-
-            // continue if a key or a value are 'None'
-            if key.is_none() || value.is_none() {
-                continue;
-            }
-
-            let key = key.unwrap().trim();
-            let value = value.unwrap();
-
-            // remove an optional comment (starting with '/') from the value
-            let value = value.split('/').next().unwrap().trim();
-
-            match key {
-                "NAXIS1" => naxis1 = value.parse().unwrap(),
-                "NAXIS2" => naxis2 = value.parse().unwrap(),
-                "CTYPE1" => ctype1 = value.to_string().replace("'", ""),
-                "CTYPE2" => ctype2 = value.to_string().replace("'", ""),
-                _ => {
-                    if let Ok(value) = value.parse() {
-                        cards.insert(key.to_string(), value);
-                    }
-                }
-            }
-        }
-
-        WCSHeader {
-            naxis1,
-            naxis2,
-            ctype1,
-            ctype2,
-            cards,
-        }
-    }
-
-    pub fn get_naxisn(&self, idx: usize) -> Option<u64> {
-        let value = match idx {
-            1 => self.naxis1,
-            2 => self.naxis2,
-            _ => 0,
-        };
-
-        // check if value == 0
-        if value > 0 {
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_ctype(&self, idx: usize) -> Result<String, Error> {
-        let value = match idx {
-            1 => &self.ctype1,
-            2 => &self.ctype2,
-            _ => "",
-        };
-
-        if value.is_empty() {
-            Err(Error::MandatoryWCSKeywordsMissing("CTYPE"))
-        } else {
-            Ok(value.to_string())
-        }
-    }
-
-    pub fn get_float(&self, key: &str) -> Option<Result<f64, Error>> {
-        if let Some(value) = self.cards.get(key.trim()) {
-            Some(Ok(*value))
-        } else {
-            None
-        }
-    }
-}
-
 pub struct WCS {
     /* Metadata keywords */
     /// Width of the image in pixels
@@ -180,32 +80,30 @@ pub struct WCS {
 /// * The unprojection of a (x, y) tuple given in pixel coordinates onto the sphere.
 ///   Results are given as a (lon, lat) tuple expressed in degrees
 impl WCS {
-    /// Create a WCS from a specific fits header parsed with fitsrs
+    /// Create a WCS from a specific WCS header
     /// # Param
-    /// * `header`: Header unit coming from fitsrs.
+    /// * `header`: a custom WCSHeader unit without relying on fitsrs.
     ///   This contains all the cards of one HDU.
-    pub fn new(header: &Header<Image>) -> Result<Self, Error> {
-        let xtension = header.get_xtension();
-
-        let naxis1 = dbg!(xtension
+    pub fn new(header: &WCSHeader) -> Result<Self, Error> {
+        let naxis1 = header
             .get_naxisn(1)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?);
-        let naxis2 = dbg!(xtension
+            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
+        let naxis2 = header
             .get_naxisn(2)
-            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?);
+            .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
 
         let proj = WCSProj::new(header)?;
 
         // Compute the field of view along the naxis1 and naxis2 axis
         let center = proj
-            .unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, (*naxis2 as f64) / 2.0))
+            .unproj_lonlat(&ImgXY::new((naxis1 as f64) / 2.0, (naxis2 as f64) / 2.0))
             .ok_or(Error::UnprojNotDefined(
-                (*naxis1 as f64) / 2.0,
-                (*naxis2 as f64) / 2.0,
+                (naxis1 as f64) / 2.0,
+                (naxis2 as f64) / 2.0,
             ))?;
 
         let half_fov1 = if let Some(top) =
-            proj.unproj_lonlat(&ImgXY::new((*naxis1 as f64) / 2.0, *naxis2 as f64))
+            proj.unproj_lonlat(&ImgXY::new((naxis1 as f64) / 2.0, naxis2 as f64))
         {
             utils::angular_dist(top.into(), center.clone().into())
         } else {
@@ -213,15 +111,15 @@ impl WCS {
         };
 
         let half_fov2 =
-            if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (*naxis2 as f64) / 2.0)) {
+            if let Some(left) = proj.unproj_lonlat(&ImgXY::new(0.0, (naxis2 as f64) / 2.0)) {
                 utils::angular_dist(left.into(), center.into())
             } else {
                 180.0_f64.to_radians()
             };
 
         Ok(WCS {
-            naxis1: *naxis1 as u64,
-            naxis2: *naxis2 as u64,
+            naxis1: naxis1 as u64,
+            naxis2: naxis2 as u64,
             fov1: half_fov1 * 2.0,
             fov2: half_fov2 * 2.0,
             proj: proj,
@@ -342,11 +240,11 @@ pub enum WCSCelestialProj {
     CooSip(Img2Celestial<Coo, WcsWithSipImgXY2ProjXY>),
 }
 
-fn parse_pc_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)>, Error> {
-    let pc11 = header.get_parsed::<f64>(b"PC1_1   ");
-    let pc12 = header.get_parsed::<f64>(b"PC1_2   ");
-    let pc21 = header.get_parsed::<f64>(b"PC2_1   ");
-    let pc22 = header.get_parsed::<f64>(b"PC2_2   ");
+fn parse_pc_matrix(header: &WCSHeader) -> Result<Option<(f64, f64, f64, f64)>, Error> {
+    let pc11 = header.get_float("PC1_1   ");
+    let pc12 = header.get_float("PC1_2   ");
+    let pc21 = header.get_float("PC2_1   ");
+    let pc22 = header.get_float("PC2_2   ");
 
     let pc_matrix_found = match (&pc11, &pc12, &pc21, &pc22) {
         (None, None, None, None) => false,
@@ -367,11 +265,11 @@ fn parse_pc_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)
     }
 }
 
-fn parse_cd_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)>, Error> {
-    let cd11 = header.get_parsed::<f64>(b"CD1_1   ");
-    let cd12 = header.get_parsed::<f64>(b"CD1_2   ");
-    let cd21 = header.get_parsed::<f64>(b"CD2_1   ");
-    let cd22 = header.get_parsed::<f64>(b"CD2_2   ");
+fn parse_cd_matrix(header: &WCSHeader) -> Result<Option<(f64, f64, f64, f64)>, Error> {
+    let cd11 = header.get_float("CD1_1   ");
+    let cd12 = header.get_float("CD1_2   ");
+    let cd21 = header.get_float("CD2_1   ");
+    let cd22 = header.get_float("CD2_2   ");
 
     let cd_matrix_found = match (&cd11, &cd12, &cd21, &cd22) {
         (None, None, None, None) => false,
@@ -393,18 +291,18 @@ fn parse_cd_matrix(header: &Header<Image>) -> Result<Option<(f64, f64, f64, f64)
 }
 
 impl WCSProj {
-    /// Create a WCS from a specific fits header parsed with fitsrs
+    /// Create a WCS from a specific WCS FITS header parsed with fitsrs
     /// # Param
-    /// * `header`: Header unit coming from fitsrs.
+    /// * `header`: a custom WCS Header unit without using fitsrs.
     ///   This contains all the cards of one HDU.
-    pub fn new(header: &Header<Image>) -> Result<Self, Error> {
+    pub fn new(header: &WCSHeader) -> Result<Self, Error> {
         // 1. Identify the image <-> intermediate projection
         // a. Linear transformation matrix cases:
         // - CRPIXi + CDij
         // - CRPIXi + CDELTi + CROTA2
         // - CRPIXi + CDELTi + PCij
-        let crpix1 = header.get_parsed::<f64>(b"CRPIX1  ").unwrap_or(Ok(0.0))?;
-        let crpix2 = header.get_parsed::<f64>(b"CRPIX2  ").unwrap_or(Ok(0.0))?;
+        let crpix1 = header.get_float("CRPIX1  ").unwrap_or(Ok(0.0))?;
+        let crpix2 = header.get_float("CRPIX2  ").unwrap_or(Ok(0.0))?;
 
         // Choice of the wcs order:
         // 1 - Priority to define the projection is given to CD
@@ -415,22 +313,22 @@ impl WCSProj {
             WcsImgXY2ProjXY::from_cd(crpix1, crpix2, cd11, cd12, cd21, cd22)
         } else {
             // Search for CDELTi
-            let cdelt1 = header.get_parsed::<f64>(b"CDELT1  ").unwrap_or(Ok(1.0))?;
-            let cdelt2 = header.get_parsed::<f64>(b"CDELT2  ").unwrap_or(Ok(1.0))?;
+            let cdelt1 = header.get_float("CDELT1  ").unwrap_or(Ok(1.0))?;
+            let cdelt2 = header.get_float("CDELT2  ").unwrap_or(Ok(1.0))?;
 
             if let Some((pc11, pc12, pc21, pc22)) = parse_pc_matrix(header)? {
                 // CDELTi + PCij case
                 WcsImgXY2ProjXY::from_pc(crpix1, crpix2, pc11, pc12, pc21, pc22, cdelt1, cdelt2)
             } else {
                 // CDELTi + CROTA2 case
-                let crota2 = header.get_parsed::<f64>(b"CROTA2  ").unwrap_or(Ok(0.0))?;
+                let crota2 = header.get_float("CROTA2  ").unwrap_or(Ok(0.0))?;
                 WcsImgXY2ProjXY::from_cr(crpix1, crpix2, crota2, cdelt1, cdelt2)
             }
         };
 
         // 2. Identify the projection type
-        let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
-        let _ = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE2  ")?;
+        let ctype1 = header.get_ctype(1)?;
+        let _ = header.get_ctype(2)?;
 
         let proj_name = &ctype1[5..=7];
 
