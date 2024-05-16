@@ -64,29 +64,38 @@ pub struct WCSHeader {
     naxis2: u64,
     ctype1: String,
     ctype2: String,
-    other: HashMap<String, f64>,
+    cards: HashMap<String, f64>,
 }
+
+const FITS_LINE_LENGTH: usize = 80;
 
 impl WCSHeader {
     pub fn new(s: &str) -> Self {
-        let mut other = HashMap::new();
+        let mut cards = HashMap::new();
         let mut naxis1 = 0;
         let mut naxis2 = 0;
         let mut ctype1 = String::new();
         let mut ctype2 = String::new();
 
-        for line in s.lines() {
-            let mut iter = line.split_whitespace();
+        let mut offset: usize = 0;
+
+        while offset < s.len() {
+            let line = &s[offset..offset + FITS_LINE_LENGTH];
+            offset += FITS_LINE_LENGTH;
+
+            // split the line into key and value by "= "
+            let mut iter = line.split("= ");
             let key = iter.next().unwrap();
             let value = iter.next().unwrap();
-            match key {
+
+            match key.trim() {
                 "NAXIS1" => naxis1 = value.parse().unwrap(),
                 "NAXIS2" => naxis2 = value.parse().unwrap(),
                 "CTYPE1" => ctype1 = value.to_string(),
                 "CTYPE2" => ctype2 = value.to_string(),
                 _ => {
                     if let Ok(value) = value.parse() {
-                        other.insert(key.to_string(), value);
+                        cards.insert(key.to_string(), value);
                     }
                 }
             }
@@ -97,7 +106,7 @@ impl WCSHeader {
             naxis2,
             ctype1,
             ctype2,
-            other,
+            cards,
         }
     }
 }
