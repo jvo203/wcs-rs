@@ -17,7 +17,7 @@ pub enum RadeSys {
 
 impl RadeSys {
     pub fn parse(header: &WCSHeader) -> Result<Self, Error> {
-        let radesys = utils::retrieve_mandatory_parsed_keyword::<String>(header, "RADESYS ")?;
+        let radesys = header.get_radesys()?;
 
         match radesys.as_str() {
             "ICRS" => Ok(RadeSys::ICRS),

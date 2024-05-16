@@ -7,6 +7,7 @@ pub struct WCSHeader {
     naxis2: u64,
     ctype1: String,
     ctype2: String,
+    radesys: String,
     cards: HashMap<String, f64>,
 }
 
@@ -19,6 +20,7 @@ impl WCSHeader {
         let mut naxis2 = 0;
         let mut ctype1 = String::new();
         let mut ctype2 = String::new();
+        let mut radesys = String::new();
 
         let mut offset: usize = 0;
 
@@ -47,6 +49,7 @@ impl WCSHeader {
                 "NAXIS2" => naxis2 = value.parse().unwrap(),
                 "CTYPE1" => ctype1 = value.to_string().replace("'", ""),
                 "CTYPE2" => ctype2 = value.to_string().replace("'", ""),
+                "RADESYS" => radesys = value.to_string().replace("'", ""),
                 _ => {
                     if let Ok(value) = value.parse() {
                         cards.insert(key.to_string(), value);
@@ -60,6 +63,7 @@ impl WCSHeader {
             naxis2,
             ctype1,
             ctype2,
+            radesys,
             cards,
         }
     }
@@ -90,6 +94,14 @@ impl WCSHeader {
             Err(Error::MandatoryWCSKeywordsMissing("CTYPE"))
         } else {
             Ok(value.to_string())
+        }
+    }
+
+    pub fn get_radesys(&self) -> Result<String, Error> {
+        if self.radesys.is_empty() {
+            Err(Error::MandatoryWCSKeywordsMissing("RADESYS"))
+        } else {
+            Ok(self.radesys.to_string())
         }
     }
 
