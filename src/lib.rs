@@ -86,7 +86,7 @@ impl WCSHeader {
             // split the line into key and value by "= "
             let mut iter = line.split("= ");
             let key = iter.next().unwrap();
-            let value = iter.next().unwrap();
+            let value = iter.next().unwrap().trim();
 
             match key.trim() {
                 "NAXIS1" => naxis1 = value.parse().unwrap(),
