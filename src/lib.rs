@@ -80,9 +80,12 @@ pub struct WCS {
 impl WCS {
     /// Create a WCS from a specific WCS header
     /// # Param
+    /// * `s`: a string containing the WCS header
     /// * `header`: a custom WCSHeader unit without relying on fitsrs.
     ///   This contains all the cards of one HDU.
-    pub fn new(header: &WCSHeader) -> Result<Self, Error> {
+    pub fn new(s: &str) -> Result<Self, Error> {
+        let header = WCSHeader::new(s);
+
         let naxis1 = header
             .get_naxisn(1)
             .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?;
@@ -90,7 +93,7 @@ impl WCS {
             .get_naxisn(2)
             .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?;
 
-        let proj = WCSProj::new(header)?;
+        let proj = WCSProj::new(&header)?;
 
         // Compute the field of view along the naxis1 and naxis2 axis
         let center = proj
