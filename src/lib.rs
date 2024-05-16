@@ -85,10 +85,18 @@ impl WCSHeader {
 
             // split the line into key and value by "= "
             let mut iter = line.split("= ");
-            let key = iter.next().unwrap();
-            let value = iter.next().unwrap().trim();
+            let key = iter.next();
+            let value = iter.next();
 
-            match key.trim() {
+            // continue if a key or a value are 'None'
+            if key.is_none() || value.is_none() {
+                continue;
+            }
+
+            let key = key.unwrap().trim();
+            let value = value.unwrap().trim();
+
+            match key {
                 "NAXIS1" => naxis1 = value.parse().unwrap(),
                 "NAXIS2" => naxis2 = value.parse().unwrap(),
                 "CTYPE1" => ctype1 = value.to_string().replace("'", ""),
