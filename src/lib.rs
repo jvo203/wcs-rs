@@ -94,7 +94,10 @@ impl WCSHeader {
             }
 
             let key = key.unwrap().trim();
-            let value = value.unwrap().trim();
+            let value = value.unwrap();
+
+            // remove an optional comment (starting with '/') from the value
+            let value = value.split('/').next().unwrap().trim();
 
             match key {
                 "NAXIS1" => naxis1 = value.parse().unwrap(),
