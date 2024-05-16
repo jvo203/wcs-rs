@@ -120,6 +120,21 @@ impl WCSHeader {
             cards,
         }
     }
+
+    pub fn get_naxisn(&self, idx: usize) -> Option<u64> {
+        let value = match idx {
+            1 => self.naxis1,
+            2 => self.naxis2,
+            _ => 0,
+        };
+
+        // check if value == 0
+        if value > 0 {
+            Some(value)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct WCS {
