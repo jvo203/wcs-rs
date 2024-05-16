@@ -5,10 +5,6 @@ quick_error! {
             from()
         }
         /// Encountered when parsing the Fits file, returned from fitsrs
-        FitsParsing(err: fitsrs::error::Error) {
-            from()
-            display("{}", err)
-        }
         /// Unprojection not defined
         UnprojNotDefined(img_x: f64, img_y: f64) {
             display("({}, {}) is out of projection", img_x, img_y)

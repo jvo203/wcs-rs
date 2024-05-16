@@ -1,4 +1,3 @@
-extern crate fitsrs;
 extern crate mapproj;
 #[macro_use]
 extern crate quick_error;
@@ -17,7 +16,6 @@ use crate::header::WCSHeader;
 use crate::projection::WCSCanonicalProjection;
 
 // Imports
-use fitsrs::hdu::header::{extension::image::Image, Header};
 use mapproj::{
     conic::{cod::Cod, coe::Coe, coo::Coo, cop::Cop},
     cylindrical::{car::Car, cea::Cea, cyp::Cyp, mer::Mer},

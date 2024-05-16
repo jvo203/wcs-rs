@@ -112,4 +112,12 @@ impl WCSHeader {
             None
         }
     }
+
+    pub fn get_int(&self, key: &str) -> Option<Result<i64, Error>> {
+        if let Some(value) = self.cards.get(key.trim()) {
+            Some(Ok(*value as i64))
+        } else {
+            None
+        }
+    }
 }

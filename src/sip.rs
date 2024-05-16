@@ -4,21 +4,16 @@
 //! "The SIP convention for Representing Distortion in FITS Image Headers" by David L. Shupe et al.
 //! in the proceedings of ADASS XIV (2005).
 
-use fitsrs::hdu::header::{
-    Header,
-    extension::image::Image
-};
+use crate::header::WCSHeader;
 use mapproj::sip::{Sip, SipAB, SipCoeff};
 
 use crate::error::Error;
 
-use crate::utils::string_to_keyword_type;
-
 /// A method that return sip coefficients
-fn retrieve_sip_coeffs(header: &Header<Image>, id: &'static str) -> Result<Option<SipCoeff>, Error> {
+fn retrieve_sip_coeffs(header: &WCSHeader, id: &'static str) -> Result<Option<SipCoeff>, Error> {
     let kw_order = format!("{}_ORDER ", id);
-    let kw_order = unsafe { string_to_keyword_type(&kw_order) };
-    if let Some(num_order) = header.get_parsed::<i64>(kw_order) {
+    // let kw_order = unsafe { string_to_keyword_type(&kw_order) };
+    if let Some(num_order) = header.get_int(&kw_order) {
         let num_order = num_order?;
 
         let coeffs = (0..=num_order)
@@ -26,11 +21,11 @@ fn retrieve_sip_coeffs(header: &Header<Image>, id: &'static str) -> Result<Optio
             .filter(|(i, j)| i + j <= num_order)
             .map(|(i, j)| {
                 let kw_coeff_ij = format!("{}_{}_{}   ", id, i, j);
-                let kw_coeff_ij = unsafe { string_to_keyword_type(&kw_coeff_ij) };
+                // let kw_coeff_ij = unsafe { string_to_keyword_type(&kw_coeff_ij) };
 
-                header.get_parsed::<f64>(kw_coeff_ij).unwrap_or(Ok(0.0))
+                header.get_float(&kw_coeff_ij).unwrap_or(Ok(0.0))
             })
-            .collect::<Result<Vec<_>, fitsrs::error::Error>>()?
+            .collect::<Result<Vec<_>, crate::error::Error>>()?
             .into_boxed_slice();
 
         Ok(Some(SipCoeff::new(coeffs)))
@@ -39,7 +34,7 @@ fn retrieve_sip_coeffs(header: &Header<Image>, id: &'static str) -> Result<Optio
     }
 }
 
-pub fn parse_sip(header: &Header<Image>, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
+pub fn parse_sip(header: &WCSHeader, crpix1: f64, crpix2: f64) -> Result<Sip, Error> {
     // proj SIP coefficients
     let a_coeffs = retrieve_sip_coeffs(header, "A")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
     let b_coeffs = retrieve_sip_coeffs(header, "B")?.unwrap_or_else(|| SipCoeff::new(Box::new([])));
@@ -54,10 +49,11 @@ pub fn parse_sip(header: &Header<Image>, crpix1: f64, crpix2: f64) -> Result<Sip
         _ => None,
     };
 
-    let xtension = header.get_xtension();
-    let naxis1 = (*xtension.get_naxisn(1)
+    let naxis1 = (header
+        .get_naxisn(1)
         .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS1"))?) as f64;
-    let naxis2 = (*xtension.get_naxisn(2)
+    let naxis2 = (header
+        .get_naxisn(2)
         .ok_or(Error::MandatoryWCSKeywordsMissing("NAXIS2"))?) as f64;
 
     let u = (-crpix1)..=(naxis1 - crpix1);

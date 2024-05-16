@@ -1,6 +1,5 @@
 use crate::error::Error;
 use crate::header::WCSHeader;
-use crate::utils;
 
 pub enum RadeSys {
     /// International Celestial Reference System
