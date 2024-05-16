@@ -1,6 +1,5 @@
-use fitsrs::hdu::header::{extension::image::Image, Header};
-
 use crate::error::Error;
+use crate::header::WCSHeader;
 use crate::utils;
 
 pub enum RadeSys {
@@ -17,7 +16,7 @@ pub enum RadeSys {
 }
 
 impl RadeSys {
-    pub fn parse(header: &Header<Image>) -> Result<Self, Error> {
+    pub fn parse(header: &WCSHeader) -> Result<Self, Error> {
         let radesys = utils::retrieve_mandatory_parsed_keyword::<String>(header, "RADESYS ")?;
 
         match radesys.as_str() {
@@ -41,15 +40,20 @@ pub enum CooSystem {
 }
 
 impl CooSystem {
-    pub fn parse(header: &Header<Image>) -> Result<Self, Error> {
-        let equinox = utils::retrieve_mandatory_parsed_keyword::<f64>(header, "EQUINOX ");
+    pub fn parse(header: &WCSHeader) -> Result<Self, Error> {
+        // wrap get_float("EQUINOX") in a Result<f64, Error>
+        let equinox = match header.get_float("EQUINOX") {
+            Some(Ok(equinox)) => Ok(equinox),
+            _ => Err(Error::MandatoryWCSKeywordsMissing("EQUINOX")),
+        };
+
         let radesys = RadeSys::parse(header);
 
         let coo_system = if let (Ok(radesys), Ok(equinox)) = (radesys, equinox) {
             // if there is a radesys take it into account
             CooSystem::CUSTOM { radesys, equinox }
         } else {
-            let ctype1 = utils::retrieve_mandatory_parsed_keyword::<String>(header, "CTYPE1  ")?;
+            let ctype1 = header.get_ctype(1)?;
 
             match ctype1.as_bytes()[0] {
                 b'G' => CooSystem::GALACTIC,
