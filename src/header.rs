@@ -58,6 +58,9 @@ impl WCSHeader {
             }
         }
 
+        // override the radesys
+        radesys = "FK5".to_string();
+
         WCSHeader {
             naxis1,
             naxis2,
